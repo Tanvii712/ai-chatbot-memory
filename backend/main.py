@@ -1,45 +1,26 @@
+from dotenv import load_dotenv
+load_dotenv()
 from fastapi import FastAPI
 from pydantic import BaseModel
 from memory import ChatMemory
-from dotenv import load_dotenv
-import os
-from openai import OpenAI
-
-# Load environment variables
-load_dotenv()
-
-# Debug check
-print("Loaded API KEY = ", os.getenv("OPENAI_API_KEY"))
-
-# Initialize client
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+from agent import run_agent
 
 app = FastAPI()
 memory = ChatMemory()
 
-
 class Query(BaseModel):
     message: str
-
 
 @app.post("/chat")
 def chat(data: Query):
 
-    # Build prompt with memory
-    past = memory.get()
-    prompt = f"Previous messages:\n{past}\n\nUser: {data.message}"
+    context = memory.get_context()
 
-    # New OpenAI API format
-    response = client.chat.completions.create(
-        model="gpt-4.1",
-        messages=[
-            {"role": "user", "content": prompt}
-        ]
-    )
+    full_query = context + "\nUser: " + data.message
 
-    reply = response.choices[0].message["content"]
+    # Run agent
+    response = run_agent(full_query)
 
-    # Save new message into memory
-    memory.add(data.message, reply)
+    memory.add(data.message, response)
 
-    return {"reply": reply}
+    return {"reply": response}
